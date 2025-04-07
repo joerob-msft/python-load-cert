@@ -9,7 +9,7 @@ def get_certificate_info(subject_name):
     # This part will depend on where your certificates are stored
     # For example, you might load them from files or a specific directory
     # Here, we assume you have a list of certificate files
-    cert_files = ["path/to/cert1.pem", "path/to/cert2.pem"]  # Update with actual paths
+    cert_files = ["/etc/ssl/certs/cert1.pem"]  # Update with actual paths
     
     for cert_file in cert_files:
         with open(cert_file, "rb") as f:
@@ -51,4 +51,16 @@ def get_certificate_info(subject_name):
     print(f"Has Private Key: {has_private_key}")
 
 # Call the function with the subject name "CN=joerob.local"
-get_certificate_info("CN=joerob.local")
+#get_certificate_info("CN=joerob.local")
+
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80)
+
