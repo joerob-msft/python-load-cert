@@ -3,7 +3,7 @@ from OpenSSL.crypto import X509Store, X509StoreContext, X509StoreContextError
 
 def get_certificate_info(subject_name):
     # Create a store and add certificates to it
-    store = X509Store()
+    # store = X509Store()
     
     # Load the certificates from the cert store
     # This part will depend on where your certificates are stored
@@ -64,5 +64,5 @@ def hello_world():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=443)
 
-get_certificate_info("CN=joerob.local")
+#get_certificate_info("CN=joerob.local")
 
