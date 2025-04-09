@@ -9,7 +9,7 @@ app = Flask(__name__)
 def check_certificates():
     try:
         # Directory where certificates are stored
-        certs_dir = os.getcwd()
+        certs_dir = '/var/ssl/certs'  # Common directory for certificates in Azure Web Apps
         
         # List to store certificate details
         certs_info = []
@@ -35,6 +35,7 @@ def check_certificates():
         return jsonify(certs_info)
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
