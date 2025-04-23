@@ -276,6 +276,8 @@ def find_certificates():
         "/home/site/wwwroot/certs/*.pfx",
         # private certs
         "/var/ssl/private/*.p12",
+        # public certs
+        "/var/ssl/certs/*.der",
     ]
     
     tls_certs = []
