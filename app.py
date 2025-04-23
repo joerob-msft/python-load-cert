@@ -4,8 +4,6 @@ import glob
 import datetime
 import subprocess
 import OpenSSL.crypto as crypto
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 
 app = Flask(__name__)
 
@@ -118,15 +116,6 @@ HTML_TEMPLATE = '''
                                 {% endif %}
                             </div>
                             <div class="cert-item">Fingerprint (SHA1): {{ cert.fingerprint }}</div>
-                            {% if cert.extension_info %}
-                            <div class="cert-item">Extensions: 
-                                <ul>
-                                    {% for ext in cert.extension_info %}
-                                    <li>{{ ext }}</li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -177,17 +166,34 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
+# Using EXACTLY the certificate processing function you provided 
 def get_certificate_info(cert_path):
     try:
         with open(cert_path, 'rb') as cert_file:
             cert_data = cert_file.read()
-            
+
+        if cert_path.endswith('.pfx'):
+            # For PFX files, we can't easily extract info without a password
+            # Just return basic info
+            return {
+                'name': os.path.basename(cert_path),
+                'path': cert_path,
+                'subject': 'PFX file (password protected)',
+                'issuer': 'Unknown (PFX format)',
+                'serial': 'Unknown',
+                'valid_from': 'Unknown',
+                'valid_until': 'Unknown',
+                'status': 'Unknown',
+                'days_left': 'Unknown',
+                'fingerprint': 'Unknown'
+            }
+
         try:
-            # Try to load as a PEM certificate first
+            # Try to load as a PEM certificate
             cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_data)
         except crypto.Error:
             try:
-                # If PEM fails, try to load as a DER certificate
+                # Try to load as a DER certificate
                 cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_data)
             except crypto.Error:
                 return {
@@ -195,37 +201,31 @@ def get_certificate_info(cert_path):
                     'path': cert_path,
                     'error': 'Unable to parse certificate format'
                 }
-                
+
         # Extract certificate details
         subject = ", ".join([f"{name.decode()}={value.decode()}" 
                             for name, value in cert.get_subject().get_components()])
         issuer = ", ".join([f"{name.decode()}={value.decode()}" 
                           for name, value in cert.get_issuer().get_components()])
-        
+
         # Get validity dates
         not_before = datetime.datetime.strptime(cert.get_notBefore().decode(), "%Y%m%d%H%M%SZ")
         not_after = datetime.datetime.strptime(cert.get_notAfter().decode(), "%Y%m%d%H%M%SZ")
-        
+
         # Calculate days left and status
         now = datetime.datetime.utcnow()
         days_left = (not_after - now).days
-        
+
         if now > not_after:
             status = "Expired"
         elif days_left < 30:
             status = "Warning"
         else:
             status = "Valid"
-            
+
         # Get fingerprint
         fingerprint = cert.digest("sha1").decode()
-        
-        # Get extensions
-        extension_info = []
-        for i in range(cert.get_extension_count()):
-            ext = cert.get_extension(i)
-            extension_info.append(f"{ext.get_short_name().decode()}: {str(ext)}")
-        
+
         return {
             'name': os.path.basename(cert_path),
             'path': cert_path,
@@ -236,8 +236,7 @@ def get_certificate_info(cert_path):
             'valid_until': not_after.strftime("%Y-%m-%d %H:%M:%S UTC"),
             'status': status,
             'days_left': days_left,
-            'fingerprint': fingerprint,
-            'extension_info': extension_info
+            'fingerprint': fingerprint
         }
     except Exception as e:
         return {
@@ -339,7 +338,7 @@ def home():
     return render_template_string(HTML_TEMPLATE, 
                                  public_certs=public_certs,
                                  private_certs=private_certs,
-                                 current_time="2025-04-23 20:16:54",  # Using the updated time
+                                 current_time="2025-04-23 20:25:30",  # Using the updated time
                                  current_user="joerob-msft",  # Using the provided username
                                  hostname=hostname,
                                  cert_env_var=cert_env_var,
