@@ -1,2 +1,2 @@
-Flask
-pyOpenSSL
+Flask==2.3.3
+pyOpenSSL==23.2.0
