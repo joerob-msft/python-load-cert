@@ -250,7 +250,6 @@ def find_certificates():
         "/var/ssl/certs/*.cer",
         "/var/ssl/certs/*.pem",
         "/var/ssl/certs/*.pfx",
-        "/var/ssl/certs/*.p12",
         # App Service certificate paths
         "/var/appservice/certs/*.crt",
         "/var/appservice/certs/*.cer",
@@ -275,6 +274,8 @@ def find_certificates():
         "/home/site/wwwroot/certs/*.cer",
         "/home/site/wwwroot/certs/*.pem",
         "/home/site/wwwroot/certs/*.pfx",
+        # private certs
+        "/var/ssl/private/*.p12",
     ]
     
     tls_certs = []
