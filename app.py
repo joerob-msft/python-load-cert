@@ -6,7 +6,6 @@ import subprocess
 import OpenSSL.crypto as crypto
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-import binascii
 
 app = Flask(__name__)
 
@@ -178,14 +177,25 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
-def get_der_certificate_info(cert_path):
+def get_certificate_info(cert_path):
     try:
         with open(cert_path, 'rb') as cert_file:
             cert_data = cert_file.read()
-        
-        # Parse DER format
-        cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_data)
-        
+            
+        try:
+            # Try to load as a PEM certificate first
+            cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_data)
+        except crypto.Error:
+            try:
+                # If PEM fails, try to load as a DER certificate
+                cert = crypto.load_certificate(crypto.FILETYPE_ASN1, cert_data)
+            except crypto.Error:
+                return {
+                    'name': os.path.basename(cert_path),
+                    'path': cert_path,
+                    'error': 'Unable to parse certificate format'
+                }
+                
         # Extract certificate details
         subject = ", ".join([f"{name.decode()}={value.decode()}" 
                             for name, value in cert.get_subject().get_components()])
@@ -215,9 +225,6 @@ def get_der_certificate_info(cert_path):
         for i in range(cert.get_extension_count()):
             ext = cert.get_extension(i)
             extension_info.append(f"{ext.get_short_name().decode()}: {str(ext)}")
-        
-        # For more detailed analysis, we can also use cryptography library
-        crypto_cert = x509.load_der_x509_certificate(cert_data, default_backend())
         
         return {
             'name': os.path.basename(cert_path),
@@ -291,7 +298,7 @@ def find_certificates():
     
     public_certs = []
     for cert_path in glob.glob(public_cert_path):
-        public_certs.append(get_der_certificate_info(cert_path))
+        public_certs.append(get_certificate_info(cert_path))
     
     private_certs = []
     for cert_path in glob.glob(private_cert_path):
@@ -332,7 +339,7 @@ def home():
     return render_template_string(HTML_TEMPLATE, 
                                  public_certs=public_certs,
                                  private_certs=private_certs,
-                                 current_time="2025-04-23 20:10:52 UTC",  # Using the provided time
+                                 current_time="2025-04-23 20:16:54",  # Using the updated time
                                  current_user="joerob-msft",  # Using the provided username
                                  hostname=hostname,
                                  cert_env_var=cert_env_var,
