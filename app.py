@@ -250,6 +250,7 @@ def find_certificates():
         "/var/ssl/certs/*.cer",
         "/var/ssl/certs/*.pem",
         "/var/ssl/certs/*.pfx",
+        "/var/ssl/certs/*.p12",
         # App Service certificate paths
         "/var/appservice/certs/*.crt",
         "/var/appservice/certs/*.cer",
