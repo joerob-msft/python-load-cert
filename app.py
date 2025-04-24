@@ -141,6 +141,26 @@ HTML_TEMPLATE = '''
                             <div class="cert-item">Last Modified: {{ cert.last_modified }}</div>
                             {% if cert.p12_info %}
                                 <div class="cert-item">P12 Content: {{ cert.p12_info }}</div>
+                            {% else %}
+                                {% if cert.subject %}
+                                    <div class="cert-item">Subject: {{ cert.subject }}</div>
+                                    <div class="cert-item">Issuer: {{ cert.issuer }}</div>
+                                    <div class="cert-item">Serial Number: {{ cert.serial }}</div>
+                                    <div class="cert-item">Valid From: {{ cert.valid_from }}</div>
+                                    <div class="cert-item">Valid Until: {{ cert.valid_until }}</div>
+                                    <div class="cert-item">
+                                        Status: 
+                                        {% if cert.status == "Valid" %}
+                                            <span class="status-valid">{{ cert.status }}</span>
+                                        {% elif cert.status == "Warning" %}
+                                            <span class="status-warning">{{ cert.status }} (Expires in {{ cert.days_left }} days)</span>
+                                        {% else %}
+                                            <span class="status-expired">{{ cert.status }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="cert-item">Fingerprint (SHA1): {{ cert.fingerprint }}</div>
+                                    <div class="cert-item">Has Private Key: {{ "Yes" if cert.has_private_key else "No" }}</div>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
                     </div>
@@ -166,7 +186,6 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
-# Using EXACTLY the certificate processing function you provided 
 def get_certificate_info(cert_path):
     try:
         with open(cert_path, 'rb') as cert_file:
@@ -247,42 +266,97 @@ def get_certificate_info(cert_path):
 
 def get_p12_certificate_info(cert_path):
     try:
-        # For P12 files, we can't easily extract info without a password
-        # Return basic file information instead
+        # First, try to read the basic file info
         file_stats = os.stat(cert_path)
         file_size = file_stats.st_size
         last_modified = datetime.datetime.fromtimestamp(file_stats.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         
-        p12_info = None
+        # Now try to open the P12 file directly without a password
+        with open(cert_path, 'rb') as f:
+            p12_data = f.read()
+        
         try:
-            # Try to get summary info
-            process = subprocess.run(
-                ['openssl', 'pkcs12', '-info', '-in', cert_path, '-nokeys', '-noout', '-passin', 'pass:'],
-                capture_output=True, text=True, timeout=3
-            )
-            if process.returncode == 0:
-                p12_info = "Certificate store (password protected)"
+            # Try to load the PKCS12 without a password (empty string)
+            p12 = crypto.load_pkcs12(p12_data, b'')
+            
+            # Extract the certificate
+            cert = p12.get_certificate()
+            
+            # Extract certificate details
+            subject = ", ".join([f"{name.decode()}={value.decode()}" 
+                               for name, value in cert.get_subject().get_components()])
+            issuer = ", ".join([f"{name.decode()}={value.decode()}" 
+                              for name, value in cert.get_issuer().get_components()])
+            
+            # Get validity dates
+            not_before = datetime.datetime.strptime(cert.get_notBefore().decode(), "%Y%m%d%H%M%SZ")
+            not_after = datetime.datetime.strptime(cert.get_notAfter().decode(), "%Y%m%d%H%M%SZ")
+            
+            # Calculate days left and status
+            now = datetime.datetime.utcnow()
+            days_left = (not_after - now).days
+            
+            if now > not_after:
+                status = "Expired"
+            elif days_left < 30:
+                status = "Warning"
             else:
-                # Try to count certificates in the P12 file without a password
+                status = "Valid"
+                
+            # Get fingerprint
+            fingerprint = cert.digest("sha1").decode()
+            
+            # Check if private key is available
+            has_private_key = p12.get_privatekey() is not None
+            
+            return {
+                'name': os.path.basename(cert_path),
+                'path': cert_path,
+                'cert_type': 'PKCS#12 (P12) Certificate',
+                'file_size': file_size,
+                'last_modified': last_modified,
+                'subject': subject,
+                'issuer': issuer,
+                'serial': format(cert.get_serial_number(), 'x'),
+                'valid_from': not_before.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                'valid_until': not_after.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                'status': status,
+                'days_left': days_left,
+                'fingerprint': fingerprint,
+                'has_private_key': has_private_key
+            }
+        except crypto.Error:
+            # If we can't open it without a password, fall back to the basic info
+            p12_info = None
+            try:
+                # Try to get summary info
                 process = subprocess.run(
-                    ['openssl', 'pkcs12', '-in', cert_path, '-nokeys', '-nomacver', '-passin', 'pass:'],
+                    ['openssl', 'pkcs12', '-info', '-in', cert_path, '-nokeys', '-noout', '-passin', 'pass:'],
                     capture_output=True, text=True, timeout=3
                 )
-                if "MAC verified" in process.stdout:
-                    p12_info = "Contains certificates (empty password)"
-                elif "PKCS7" in process.stdout:
-                    p12_info = "Contains PKCS7 certificates"
-        except:
-            p12_info = "Unable to examine P12 content (password protected)"
+                if process.returncode == 0:
+                    p12_info = "Certificate store (password protected)"
+                else:
+                    # Try to count certificates in the P12 file without a password
+                    process = subprocess.run(
+                        ['openssl', 'pkcs12', '-in', cert_path, '-nokeys', '-nomacver', '-passin', 'pass:'],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    if "MAC verified" in process.stdout:
+                        p12_info = "Contains certificates (empty password)"
+                    elif "PKCS7" in process.stdout:
+                        p12_info = "Contains PKCS7 certificates"
+            except:
+                p12_info = "Unable to examine P12 content (password protected)"
                 
-        return {
-            'name': os.path.basename(cert_path),
-            'path': cert_path,
-            'cert_type': 'PKCS#12 (P12) Certificate Store',
-            'file_size': file_size,
-            'last_modified': last_modified,
-            'p12_info': p12_info
-        }
+            return {
+                'name': os.path.basename(cert_path),
+                'path': cert_path,
+                'cert_type': 'PKCS#12 (P12) Certificate Store (Password Protected)',
+                'file_size': file_size,
+                'last_modified': last_modified,
+                'p12_info': p12_info
+            }
     except Exception as e:
         return {
             'name': os.path.basename(cert_path),
@@ -338,7 +412,7 @@ def home():
     return render_template_string(HTML_TEMPLATE, 
                                  public_certs=public_certs,
                                  private_certs=private_certs,
-                                 current_time="2025-04-23 20:25:30",  # Using the updated time
+                                 current_time="2025-04-24 22:33:56",  # Updated timestamp
                                  current_user="joerob-msft",  # Using the provided username
                                  hostname=hostname,
                                  cert_env_var=cert_env_var,
