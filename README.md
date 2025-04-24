@@ -20,7 +20,7 @@ A lightweight web application that provides a human-readable inventory of TLS/SS
 
 ## Screenshot
 
-![Certificate Inventory Screenshot](https://via.placeholder.com/800x450.png?text=Certificate+Inventory+Screenshot)
+![image](https://github.com/user-attachments/assets/dfa6d08a-a57c-4b31-ba96-a5b95b7fdc64)
 
 ## Deployment
 
